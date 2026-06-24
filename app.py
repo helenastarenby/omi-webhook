@@ -29,6 +29,10 @@ NOTION_HEADERS = {
 
 
 def find_q_destination(text: str) -> tuple[str, str]:
+    """
+    Letar efter 'Q <destination>' i texten (case-insensitivt).
+    Returnerar (databas_id, källa) där källa är kodordet eller 'fallback'.
+    """
     pattern = r"\bq\s+(" + "|".join(Q_DATABASES.keys()) + r")\b"
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
@@ -38,17 +42,28 @@ def find_q_destination(text: str) -> tuple[str, str]:
 
 
 def add_to_notion(database_id: str, summary: str, source: str) -> dict:
+    """Skapar en ny post i Notion-databasen."""
     url = "https://api.notion.com/v1/pages"
     now = datetime.now(timezone.utc).isoformat()
+
     payload = {
         "parent": {"database_id": database_id},
         "properties": {
-            "Name": {"title": [{"text": {"content": summary[:100]}}]},
-            "Sammanfattning": {"rich_text": [{"text": {"content": summary}}]},
-            "Datum": {"date": {"start": now}},
-            "Källa": {"rich_text": [{"text": {"content": source}}]},
+            "Name": {
+                "title": [{"text": {"content": title[:100]}}]
+            },
+            "Sammanfattning": {
+                "rich_text": [{"text": {"content": summary}}]
+            },
+            "Datum": {
+                "date": {"start": now}
+            },
+            "Källa": {
+                "rich_text": [{"text": {"content": source}}]
+            },
         },
     }
+
     response = requests.post(url, headers=NOTION_HEADERS, json=payload)
     response.raise_for_status()
     return response.json()
@@ -56,19 +71,32 @@ def add_to_notion(database_id: str, summary: str, source: str) -> dict:
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # Verifiera webhook-token
     token = request.headers.get("X-Webhook-Secret") or request.args.get("secret")
     if WEBHOOK_SECRET and token != WEBHOOK_SECRET:
         return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
+
+    # Omi Memory Creation Trigger skickar structured.overview som sammanfattning
+    # och transcript som råtext. Vi tar overview i första hand.
+    structured = data.get("structured") or {}
     summary = (
-        data.get("summary")
+        structured.get("overview")
+        or data.get("summary")
         or data.get("text")
         or data.get("transcript")
         or ""
     )
+
+    # Titeln från Omi (structured.title) används som namn om den finns
+    title = structured.get("title") or summary[:100]
+
     if not summary:
         return jsonify({"error": "No summary found in payload"}), 400
+
     database_id, source = find_q_destination(summary)
+
     try:
         notion_response = add_to_notion(database_id, summary, source)
         return jsonify({
@@ -76,15 +104,4 @@ def webhook():
             "notion_page_id": notion_response.get("id"),
             "destination": source,
         }), 200
-    except requests.HTTPError as e:
-        return jsonify({"error": str(e), "details": e.response.text}), 500
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok"}), 200
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    except requests.HTTPEr
