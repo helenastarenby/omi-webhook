@@ -49,7 +49,7 @@ def add_to_notion(database_id: str, summary: str, source: str) -> dict:
     payload = {
         "parent": {"database_id": database_id},
         "properties": {
-            "Name": {
+            "Namn": {
                 "title": [{"text": {"content": title[:100]}}]
             },
             "Sammanfattning": {
