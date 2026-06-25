@@ -18,6 +18,18 @@ Q_DATABASES = {
 
 FALLBACK_DATABASE = Q_DATABASES["notion"]
 
+TRIGGERS = [
+    (r"spara\s+analys",     "claude"),
+    (r"spara\s+privat",     "privat"),
+    (r"spara\s+brainstorm", "brainstorm"),
+    (r"spara\s+zenter",     "zenter"),
+    (r"\bq\s+claude\b",     "claude"),
+    (r"\bq\s+brainstorm\b", "brainstorm"),
+    (r"\bq\s+zenter\b",     "zenter"),
+    (r"\bq\s+privat\b",     "privat"),
+    (r"\bq\s+notion\b",     "notion"),
+]
+
 
 def get_notion_headers():
     return {
@@ -28,12 +40,10 @@ def get_notion_headers():
 
 
 def find_q_destination(text):
-    pattern = r"\bq\s+(" + "|".join(Q_DATABASES.keys()) + r")\b"
-    match = re.search(pattern, text, re.IGNORECASE)
-    if match:
-        destination = match.group(1).lower()
-        return Q_DATABASES[destination], "Q " + destination.capitalize()
-    return FALLBACK_DATABASE, "fallback"
+    for pattern, destination in TRIGGERS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return Q_DATABASES[destination], destination.capitalize()
+    return FALLBACK_DATABASE, "notion"
 
 
 def add_to_notion(database_id, title, summary, source):
